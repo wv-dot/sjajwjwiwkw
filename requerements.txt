@@ -1,0 +1,4 @@
+openpyxl
+aiogram
+telethon
+zoneinfo
