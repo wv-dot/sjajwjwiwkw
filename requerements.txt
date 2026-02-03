@@ -1,5 +1,3 @@
-openpyxl
 aiogram
 telethon
 zoneinfo
-dotenv
