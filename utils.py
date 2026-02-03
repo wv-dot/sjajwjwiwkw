@@ -4,8 +4,6 @@ import os
 import tempfile
 import asyncio
 from typing import Optional
-from openpyxl import Workbook
-from openpyxl.styles import Font, Alignment
 
 import config
 from database import Database
