@@ -802,7 +802,7 @@ async def send_admin_report(callback: CallbackQuery):
 
     date_str = callback.data.split("_")[-1]
     data = db.get_report_for_date(date_str)
-    path = await generate_excel_report(data, date_str)
+    path = await generate_json_report(data, date_str)
 
     if path:
         await callback.message.answer_document(

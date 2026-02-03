@@ -45,34 +45,40 @@ async def initialize_owners():
         except Exception as e:
             logger.error(f"Ошибка при добавлении овнера {owner_id}: {e}")
 
-async def generate_excel_report(data: list, date_str: str) -> Optional[str]:
+import json  # Добавить в импорты
+
+def generate_json_report(data: list, date_str: str) -> Optional[str]:
+    """Создает JSON отчет вместо Excel"""
     try:
-        wb = Workbook()
-        ws = wb.active
-        ws.title = f"Отчет {date_str}"
-        headers = ["ID", "Username", "Номер", "Статус", "Добавлен", "Обработан", "Код", "Причина"]
-        ws.append(headers)
-        for cell in ws[1]:
-            cell.font = Font(bold=True)
-            cell.alignment = Alignment(horizontal="center")
-
+        # Преобразуем данные в JSON-совместимый формат
+        report_data = {
+            "date": date_str,
+            "total_records": len(data),
+            "success_count": sum(1 for row in data if row['status'] == 'успешно'),
+            "records": []
+        }
+        
         for row in data:
-            ws.append([
-                row['user_id'],
-                row['username'] or "-",
-                format_phone_display(row['phone_number']),
-                row['status'],
-                row['added_at'],
-                row['completed_at'] or "-",
-                row['code'] or "-",
-                row['result_reason'] or "-"
-            ])
-
-        path = os.path.join(config.REPORTS_DIR, f"report_{date_str}.xlsx")
-        wb.save(path)
+            record = {
+                "user_id": row['user_id'],
+                "username": row['username'] or f"ID:{row['user_id']}",
+                "phone": format_phone_display(row['phone_number']),
+                "status": row['status'],
+                "added_at": row['added_at'],
+                "completed_at": row['completed_at'] or "",
+                "code": row['code'] or "",
+                "result_reason": row['result_reason'] or ""
+            }
+            report_data["records"].append(record)
+        
+        # Сохраняем в файл
+        path = tempfile.NamedTemporaryFile(dir=config.TEMP_DIR, suffix=".json", delete=False).name
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(report_data, f, ensure_ascii=False, indent=2, default=str)
+        
         return path
     except Exception as e:
-        logger.error(f"Ошибка Excel: {e}")
+        logger.error(f"Ошибка генерации JSON отчета: {e}")
         return None
 
 async def generate_txt_report(data: list, date_str: str) -> Optional[str]:
