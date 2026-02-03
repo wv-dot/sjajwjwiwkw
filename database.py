@@ -1,3 +1,5 @@
+import os
+os.system("pip install aiosqlite")
 import aiosqlite
 import logging
 import asyncio
