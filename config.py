@@ -1,16 +1,11 @@
 import os
-from dotenv import load_dotenv
 
-load_dotenv()
+BOT_TOKEN = "8580111649:AAEHlZuOtaLOjdMOH2nqO7JrVDBtmQd60wo"
+OWNER_IDS = [8582447326, 7945478679]
+API_ID = 33838105
+API_HASH = "9dbd6f29c1c76051bdcfe8fa9623dc76"
 
-BOT_TOKEN = os.getenv("BOT_TOKEN", "")
-OWNER_IDS = [int(x.strip()) for x in os.getenv("OWNER_IDS", "").split(",") if x.strip()]
-API_ID = os.getenv("API_ID", "")
-API_HASH = os.getenv("API_HASH", "")
-if not OWNER_IDS:
-    import warnings
-    warnings.warn("OWNER_IDS пуст! Бот может не работать корректно без овнеров.")
-HELP_LINK = os.getenv("HELP_LINK", "https://t.me/shluhanya")
+HELP_LINK = "https://t.me/Tixooooo2"
 
 DB_PATH = "bot_database.db"
 
@@ -161,8 +156,8 @@ class MESSAGES:
     BALANCE_ADDED = "💰 На ваш баланс начислено ${amount} за успешный номер"
 
 # ===================== Константы для юзербота =====================
-USERBOT_SESSION_NAME = os.getenv("USERBOT_SESSION_NAME", "userbot_session")
-BOT2_USERNAME = os.getenv("BOT2_USERNAME", "")  # Username бота2 (куда сдаются номера)
+USERBOT_SESSION_NAME = "userbot_session"
+BOT2_USERNAME = "log_14bot"  # Username бота2 (куда сдаются номера)
 AUTO_MODE_MESSAGE = "⚠️ Включен автоматический режим!"
 NUMBER_TAKEN_BY_AUTO_SYSTEM = "🤖 Ваш номер `{phone}` взят автосистемой."
 
