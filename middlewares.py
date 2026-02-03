@@ -24,7 +24,7 @@ class UpdateUserInfoMiddleware(BaseMiddleware):
         # Обновляем информацию о пользователе при каждом сообщении или callback
         if event.from_user:
             try:
-                await db.update_user_info(
+                db.update_user_info(
                     user_id=event.from_user.id,
                     username=event.from_user.username,
                     first_name=event.from_user.first_name,
@@ -45,10 +45,10 @@ class SubscriptionMiddleware(BaseMiddleware):
     ) -> Any:
         user_id = event.from_user.id
 
-        if await db.is_admin_in_db(user_id) or user_id in config.OWNER_IDS:
+        if db.is_admin_in_db(user_id) or user_id in config.OWNER_IDS:
             return await handler(event, data)
 
-        channel_id = await db.get_subscription_channel()
+        channel_id = db.get_subscription_channel()
         if not channel_id:
             return await handler(event, data)
 

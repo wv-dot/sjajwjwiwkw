@@ -22,11 +22,11 @@ logger = logging.getLogger(__name__)
 # ===================== Вспомогательные функции =====================
 async def show_main_menu(message_or_callback, user_id: int, username: str = None):
     """Показывает главное меню пользователю"""
-    work_active = await db.is_work_active()
-    queue_count = await db.get_queue_count()
-    user_queue = await db.get_user_queue_with_ids(user_id)
+    work_active = db.is_work_active()
+    queue_count = db.get_queue_count()
+    user_queue = db.get_user_queue_with_ids(user_id)
     user_queue_count = len(user_queue)
-    user_balance = await db.get_user_balance(user_id)
+    user_balance = db.get_user_balance(user_id)
 
     status_emoji = "✅" if work_active else "❌"
     display_username = username or config.MESSAGES.USERNAME_PLACEHOLDER
@@ -75,10 +75,10 @@ temp_data: Dict[str, Any] = {'requests': {}}  # Для админов: {admin_id
 # ===================== /start =====================
 @router.message(CommandStart())
 async def start_handler(message: Message):
-    await db.register_user(message.from_user.id, message.from_user.username,
+    db.register_user(message.from_user.id, message.from_user.username,
                            message.from_user.first_name, message.from_user.last_name)
 
-    if await db.is_user_banned(message.from_user.id):
+    if db.is_user_banned(message.from_user.id):
         await message.answer(config.BANNED_MESSAGE)
         return
 
@@ -88,7 +88,7 @@ async def start_handler(message: Message):
 # ===================== Добавление номера =====================
 @router.callback_query(F.data == "add_number")
 async def add_number_handler(callback: CallbackQuery, state: FSMContext):
-    if not await db.is_work_active():
+    if not db.is_work_active():
         await callback.answer(config.WORK_STOPPED_USER_MSG, show_alert=True)
         return
 
@@ -104,7 +104,7 @@ async def add_number_handler(callback: CallbackQuery, state: FSMContext):
 
 @router.message(UserStates.waiting_phone)
 async def phone_input_handler(message: Message, state: FSMContext):
-    if not await db.is_work_active():
+    if not db.is_work_active():
         await message.answer(config.WORK_STOPPED_USER_MSG)
         await state.clear()
         return
@@ -123,17 +123,17 @@ async def phone_input_handler(message: Message, state: FSMContext):
             failed_messages.append(f"❌ `{line}` - неверный формат")
             continue
 
-        if await db.is_number_blocked(phone):
+        if db.is_number_blocked(phone):
             failed_count += 1
             failed_messages.append(f"🚫 `{phone}` - заблокирован")
             continue
 
-        if await db.is_number_in_queue_or_success(phone):
+        if db.is_number_in_queue_or_success(phone):
             failed_count += 1
             failed_messages.append(f"⚠️ `{phone}` - уже в очереди")
             continue
 
-        await db.add_phone_number(message.from_user.id, phone, line)
+        db.add_phone_number(message.from_user.id, phone, line)
         added_count += 1
 
     # Формируем ответ
@@ -167,13 +167,13 @@ async def phone_input_handler(message: Message, state: FSMContext):
 # ===================== Мои номера =====================
 @router.callback_query(F.data == "my_numbers")
 async def my_numbers_handler(callback: CallbackQuery):
-    work_active = await db.is_work_active()
+    work_active = db.is_work_active()
     if not work_active:
         await callback.answer(config.WORK_STOPPED_USER_MSG, show_alert=True)
         return
 
-    queue = await db.get_user_queue_with_ids(callback.from_user.id)
-    today_total, today_success = await db.get_today_stats()
+    queue = db.get_user_queue_with_ids(callback.from_user.id)
+    today_total, today_success = db.get_today_stats()
 
     text = config.MESSAGES.MY_NUMBERS_HEADER.format(
         today_success=today_success,
@@ -195,7 +195,7 @@ async def my_numbers_handler(callback: CallbackQuery):
 @router.callback_query(F.data.startswith("show_number_"))
 async def show_number_handler(callback: CallbackQuery):
     number_id = int(callback.data.split("_")[-1])
-    number_data = await db.get_number_by_id_for_user(callback.from_user.id, number_id)
+    number_data = db.get_number_by_id_for_user(callback.from_user.id, number_id)
     
     if not number_data:
         await callback.answer(config.MESSAGES.NUMBER_NOT_FOUND, show_alert=True)
@@ -213,14 +213,14 @@ async def show_number_handler(callback: CallbackQuery):
 @router.callback_query(F.data.startswith("delete_number_"))
 async def delete_number_handler(callback: CallbackQuery, bot: Bot):
     number_id = int(callback.data.split("_")[-1])
-    number_data = await db.get_number_by_id_for_user(callback.from_user.id, number_id)
+    number_data = db.get_number_by_id_for_user(callback.from_user.id, number_id)
     
     if not number_data:
         await callback.answer(config.MESSAGES.NUMBER_NOT_FOUND, show_alert=True)
         return
 
     phone = number_data['phone_number']
-    deleted_data = await db.delete_number_from_queue(number_id)
+    deleted_data = db.delete_number_from_queue(number_id)
     
     if deleted_data:
         display_phone = format_phone_display(phone)
@@ -244,7 +244,7 @@ async def delete_number_handler(callback: CallbackQuery, bot: Bot):
 
 @router.callback_query(F.data == "user_report")
 async def user_report_dates(callback: CallbackQuery):
-    dates = await db.get_report_dates()
+    dates = db.get_report_dates()
     if not dates:
         await callback.message.edit_text(config.MESSAGES.NO_REPORT_DATA)
         return
@@ -258,7 +258,7 @@ async def user_report_dates(callback: CallbackQuery):
 @router.callback_query(F.data.startswith("user_report_date_"))
 async def send_user_report(callback: CallbackQuery):
     date_str = callback.data.split("_")[-1]
-    data = await db.get_user_report_for_date(callback.from_user.id, date_str)
+    data = db.get_user_report_for_date(callback.from_user.id, date_str)
     path = await generate_txt_report(data, date_str)
 
     if path:
@@ -287,7 +287,7 @@ async def admin_panel_handler(message: Message):
         await message.answer(config.NO_ACCESS_MESSAGE)
         return
 
-    active = await db.is_work_active()
+    active = db.is_work_active()
     is_owner_user = await is_owner(message.from_user.id)
     admin_text = await get_admin_panel_text()
     await message.answer(admin_text, reply_markup=admin_panel(active, is_owner_user))
@@ -299,7 +299,7 @@ async def toggle_work(callback: CallbackQuery, bot: Bot):
         return
 
     new_status = callback.data == "start_work"
-    await db.set_work_active(new_status)
+    db.set_work_active(new_status)
     await send_to_all(bot, config.WORK_STARTED_MSG if new_status else config.WORK_STOPPED_MSG)
 
     is_owner_user = await is_owner(callback.from_user.id)
@@ -314,16 +314,16 @@ async def take_number_handler(message: Message, bot: Bot):
         await message.answer(config.NO_ACCESS_MESSAGE)
         return
 
-    if not await db.is_work_active():
+    if not db.is_work_active():
         await message.answer(config.MESSAGES.WORK_STOPPED)
         return
 
     # Проверка авторежима
-    if await db.is_auto_mode_enabled():
+    if db.is_auto_mode_enabled():
         await message.answer(config.AUTO_MODE_MESSAGE)
         return
 
-    number_data = await db.get_next_in_queue()
+    number_data = db.get_next_in_queue()
     if not number_data:
         await message.answer(config.MESSAGES.QUEUE_EMPTY)
         return
@@ -334,7 +334,7 @@ async def take_number_handler(message: Message, bot: Bot):
     user_id = number_data['user_id']
     owner_name = number_data.get('username') or number_data.get('first_name') or f"ID: {user_id}"
 
-    await db.take_number(number_id, message.from_user.id)
+    db.take_number(number_id, message.from_user.id)
 
     # Инициализируем структуру для админа, если её нет
     if message.from_user.id not in temp_data:
@@ -372,7 +372,7 @@ async def request_code_handler(callback: CallbackQuery, bot: Bot):
         await callback.answer("Неверный ID номера", show_alert=True)
         return
 
-    number_data = await db.get_phone_by_id(number_id)
+    number_data = db.get_phone_by_id(number_id)
     if not number_data:
         await callback.answer(config.MESSAGES.NUMBER_NOT_FOUND, show_alert=True)
         return
@@ -442,14 +442,14 @@ async def code_from_user(message: Message, bot: Bot):
         return
 
     code = message.text.strip()
-    number_data = await db.get_phone_by_id(number_id)
+    number_data = db.get_phone_by_id(number_id)
     
     if not number_data:
         await message.answer(config.MESSAGES.NUMBER_NOT_FOUND_PROCESSED)
         return
 
     # Обновляем статус с кодом
-    await db.update_number_status(number_id, 'взято', code=code)
+    db.update_number_status(number_id, 'взято', code=code)
 
     # Проверяем, является ли запрос от юзербота (admin_id = 0)
     if admin_id == 0:
@@ -510,7 +510,7 @@ async def admin_action(callback: CallbackQuery, bot: Bot):
         await callback.answer("Неверный ID номера", show_alert=True)
         return
 
-    number_data = await db.get_phone_by_id(number_id)
+    number_data = db.get_phone_by_id(number_id)
     if not number_data:
         await callback.answer(config.MESSAGES.NUMBER_NOT_FOUND, show_alert=True)
         return
@@ -584,14 +584,14 @@ async def admin_action(callback: CallbackQuery, bot: Bot):
     new_status, user_text, kb, block = status_map[action]
 
     # Завершаем номер в БД
-    await db.update_number_status(number_id, new_status)
+    db.update_number_status(number_id, new_status)
 
     # Начисляем баланс при статусе "успешно"
     if action == "success":
-        price = await db.get_price_per_number()
+        price = db.get_price_per_number()
         if price > 0:
-            await db.update_user_balance(user_id, price)
-            await db.add_transaction(user_id, price, "payment")
+            db.update_user_balance(user_id, price)
+            db.add_transaction(user_id, price, "payment")
             # Уведомляем пользователя о начислении
             try:
                 await bot.send_message(
@@ -604,7 +604,7 @@ async def admin_action(callback: CallbackQuery, bot: Bot):
 
     # Блокируем номер при необходимости
     if block:
-        await db.block_number(phone)
+        db.block_number(phone)
 
     # Уведомление пользователю
     try:
@@ -655,7 +655,7 @@ async def timeout_handler(callback: CallbackQuery, bot: Bot):
         return
 
     number_id = int(callback.data.split("_")[-1])
-    number_data = await db.get_phone_by_id(number_id)
+    number_data = db.get_phone_by_id(number_id)
     
     if not number_data:
         await callback.answer(config.MESSAGES.NUMBER_NOT_FOUND, show_alert=True)
@@ -665,7 +665,7 @@ async def timeout_handler(callback: CallbackQuery, bot: Bot):
     user_id = number_data['user_id']
 
     # Устанавливаем статус "отменен"
-    await db.update_number_status(number_id, config.MESSAGES.STATUS_CANCELLED)
+    db.update_number_status(number_id, config.MESSAGES.STATUS_CANCELLED)
 
     # Уведомляем пользователя
     try:
@@ -707,12 +707,12 @@ async def cancel_number_user(callback: CallbackQuery, bot: Bot, state: FSMContex
         if req_data.get('user_id') == user_id:
             number_id = req_data['number_id']
             admin_id = req_data['admin_id']
-            number_data = await db.get_phone_by_id(number_id)
+            number_data = db.get_phone_by_id(number_id)
             
             if number_data:
                 phone = number_data['phone_number']
                 # Устанавливаем статус "отменен" вместо возврата в очередь
-                await db.update_number_status(number_id, 'отменен')
+                db.update_number_status(number_id, 'отменен')
                 
                 # Если номер обрабатывает юзербот, отменяем его и в бот2
                 if admin_id == 0:
@@ -757,7 +757,7 @@ async def cancel_number_user(callback: CallbackQuery, bot: Bot, state: FSMContex
                 await my_numbers_handler(callback)
             elif return_context == "admin_panel":
                 if await is_admin(user_id):
-                    active = await db.is_work_active()
+                    active = db.is_work_active()
                     is_owner_user = await is_owner(user_id)
                     admin_text = await get_admin_panel_text()
                     await callback.message.edit_text(admin_text, reply_markup=admin_panel(active, is_owner_user))
@@ -783,10 +783,10 @@ async def admin_report_dates(callback: CallbackQuery):
         await callback.answer(config.NO_ACCESS_MESSAGE, show_alert=True)
         return
 
-    dates = await db.get_report_dates()
+    dates = db.get_report_dates()
     if not dates:
         is_owner_user = await is_owner(callback.from_user.id)
-        await callback.message.edit_text(config.MESSAGES.NO_REPORT_DATA, reply_markup=admin_panel(await db.is_work_active(), is_owner_user))
+        await callback.message.edit_text(config.MESSAGES.NO_REPORT_DATA, reply_markup=admin_panel(db.is_work_active(), is_owner_user))
         return
 
     await callback.message.edit_text(
@@ -801,7 +801,7 @@ async def send_admin_report(callback: CallbackQuery):
         return
 
     date_str = callback.data.split("_")[-1]
-    data = await db.get_report_for_date(date_str)
+    data = db.get_report_for_date(date_str)
     path = await generate_excel_report(data, date_str)
 
     if path:
@@ -815,7 +815,7 @@ async def send_admin_report(callback: CallbackQuery):
 
     is_owner_user = await is_owner(callback.from_user.id)
     admin_text = await get_admin_panel_text()
-    await callback.message.edit_text(admin_text, reply_markup=admin_panel(await db.is_work_active(), is_owner_user))
+    await callback.message.edit_text(admin_text, reply_markup=admin_panel(db.is_work_active(), is_owner_user))
 
 
 # ===================== Рассылка =====================
@@ -886,7 +886,7 @@ async def broadcast_confirm(callback: CallbackQuery, bot: Bot):
         await callback.answer(config.MESSAGES.BROADCAST_NO_TEXT, show_alert=True)
         return
 
-    users = await db.get_all_users()
+    users = db.get_all_users()
     sent = 0
     for user_id in users:
         try:
@@ -939,12 +939,12 @@ async def ban_handler(message: Message, state: FSMContext):
     try:
         target_id = int(message.text.strip())
         # Проверяем существование пользователя
-        user_data = await db.get_user_by_id(target_id)
+        user_data = db.get_user_by_id(target_id)
         if not user_data:
             await message.answer(config.MESSAGES.BAN_INVALID_ID)
             await state.clear()
             return
-        await db.ban_user(target_id)
+        db.ban_user(target_id)
         await message.answer(config.MESSAGES.BAN_SUCCESS.format(user_id=target_id))
     except ValueError:
         await message.answer(config.MESSAGES.BAN_INVALID_ID)
@@ -974,12 +974,12 @@ async def unban_handler(message: Message, state: FSMContext):
     try:
         target_id = int(message.text.strip())
         # Проверяем существование пользователя
-        user_data = await db.get_user_by_id(target_id)
+        user_data = db.get_user_by_id(target_id)
         if not user_data:
             await message.answer(config.MESSAGES.UNBAN_INVALID_ID)
             await state.clear()
             return
-        await db.unban_user(target_id)
+        db.unban_user(target_id)
         await message.answer(config.MESSAGES.UNBAN_SUCCESS.format(user_id=target_id))
     except ValueError:
         await message.answer(config.MESSAGES.UNBAN_INVALID_ID)
@@ -997,7 +997,7 @@ async def clear_queue_handler(callback: CallbackQuery, bot: Bot):
         return
 
     # Получаем все номера для уведомлений
-    deleted_numbers = await db.clear_queue()
+    deleted_numbers = db.clear_queue()
     
     # Отправляем уведомления пользователям
     notified = 0
@@ -1019,7 +1019,7 @@ async def clear_queue_handler(callback: CallbackQuery, bot: Bot):
     # Обновляем админ-панель
     is_owner_user = await is_owner(callback.from_user.id)
     admin_text = await get_admin_panel_text()
-    await callback.message.edit_text(admin_text, reply_markup=admin_panel(await db.is_work_active(), is_owner_user))
+    await callback.message.edit_text(admin_text, reply_markup=admin_panel(db.is_work_active(), is_owner_user))
 
 
 # ===================== Управление админами =====================
@@ -1052,7 +1052,7 @@ async def add_admin_handler(message: Message, state: FSMContext):
 
     try:
         target_id = int(message.text.strip())
-        await db.add_admin(target_id, added_by=message.from_user.id, is_owner=False)
+        db.add_admin(target_id, added_by=message.from_user.id, is_owner=False)
         await message.answer(config.MESSAGES.ADD_ADMIN_SUCCESS.format(user_id=target_id))
     except ValueError:
         await message.answer(config.MESSAGES.ADD_ADMIN_INVALID_ID)
@@ -1090,19 +1090,19 @@ async def remove_admin_handler(message: Message, state: FSMContext):
             return
         
         # Проверяем, является ли пользователь овнером
-        if await db.is_owner_in_db(target_id):
+        if db.is_owner_in_db(target_id):
             await message.answer(config.MESSAGES.REMOVE_ADMIN_OWNER)
             await state.clear()
             return
         
         # Проверяем, является ли пользователь админом
-        if not await db.is_admin_in_db(target_id):
+        if not db.is_admin_in_db(target_id):
             await message.answer(config.MESSAGES.REMOVE_ADMIN_NOT_ADMIN.format(user_id=target_id))
             await state.clear()
             return
         
         # Снимаем с админки
-        await db.remove_admin(target_id)
+        db.remove_admin(target_id)
         await message.answer(config.MESSAGES.REMOVE_ADMIN_SUCCESS.format(user_id=target_id))
     except ValueError:
         await message.answer(config.MESSAGES.REMOVE_ADMIN_INVALID_ID)
@@ -1118,7 +1118,7 @@ async def list_admins_handler(callback: CallbackQuery):
         await callback.answer(config.NO_ACCESS_MESSAGE, show_alert=True)
         return
 
-    admins = await db.get_all_admins()
+    admins = db.get_all_admins()
     if not admins:
         await callback.message.edit_text(config.MESSAGES.LIST_ADMINS_EMPTY, reply_markup=manage_admins_keyboard())
         return
@@ -1151,7 +1151,7 @@ async def back_to_admin_handler(callback: CallbackQuery):
         await callback.answer(config.NO_ACCESS_MESSAGE, show_alert=True)
         return
 
-    active = await db.is_work_active()
+    active = db.is_work_active()
     is_owner_user = await is_owner(callback.from_user.id)
     admin_text = await get_admin_panel_text()
     await callback.message.edit_text(admin_text, reply_markup=admin_panel(active, is_owner_user))
@@ -1159,7 +1159,7 @@ async def back_to_admin_handler(callback: CallbackQuery):
 
 @router.callback_query(F.data == "check_subscription")
 async def check_subscription_handler(callback: CallbackQuery, bot: Bot):
-    channel_id = await db.get_subscription_channel()
+    channel_id = db.get_subscription_channel()
     if not channel_id:
         # Если подписка отключена — сразу разблокируем
         await callback.message.edit_text(config.MESSAGES.SUBSCRIPTION_SUCCESS)
@@ -1194,7 +1194,7 @@ async def manage_subscription_handler(callback: CallbackQuery):
         await callback.answer(config.NO_ACCESS_MESSAGE, show_alert=True)
         return
 
-    current_channel = await db.get_subscription_channel()
+    current_channel = db.get_subscription_channel()
     text = "📢 Управление обязательной подпиской\n\n"
     if current_channel:
         try:
@@ -1243,7 +1243,7 @@ async def set_subscription_handler(message: Message, state: FSMContext, bot: Bot
             await state.clear()
             return
 
-        await db.set_subscription_channel(channel_id)
+        db.set_subscription_channel(channel_id)
         await message.answer(config.MESSAGES.SUBSCRIPTION_SET.format(username=channel_username))
     except Exception as e:
         logger.error(f"Ошибка установки канала: {e}")
@@ -1258,8 +1258,8 @@ async def remove_subscription_handler(callback: CallbackQuery):
         await callback.answer(config.NO_ACCESS_MESSAGE, show_alert=True)
         return
 
-    await db.remove_subscription_channel()
-    await callback.message.edit_text(config.MESSAGES.SUBSCRIPTION_REMOVED, reply_markup=admin_panel(await db.is_work_active(), True))
+    db.remove_subscription_channel()
+    await callback.message.edit_text(config.MESSAGES.SUBSCRIPTION_REMOVED, reply_markup=admin_panel(db.is_work_active(), True))
     await callback.answer("Подписка отключена")
 
 
@@ -1291,7 +1291,7 @@ async def set_price_handler(message: Message, state: FSMContext):
             await message.answer(config.MESSAGES.SET_PRICE_INVALID)
             return
         
-        await db.set_price_per_number(price)
+        db.set_price_per_number(price)
         await message.answer(config.MESSAGES.SET_PRICE_SUCCESS.format(price=f"{price:.2f}"))
     except ValueError:
         await message.answer(config.MESSAGES.SET_PRICE_INVALID)
@@ -1302,7 +1302,7 @@ async def set_price_handler(message: Message, state: FSMContext):
     await state.clear()
     
     # Возвращаемся в админ панель
-    active = await db.is_work_active()
+    active = db.is_work_active()
     admin_text = await get_admin_panel_text()
     await message.answer(admin_text, reply_markup=admin_panel(active, True))
 
@@ -1312,7 +1312,7 @@ async def withdraw_start(callback: CallbackQuery):
     """Обработчик вывода средств"""
     user_id = callback.from_user.id
 
-    balance = await db.get_user_balance(user_id)
+    balance = db.get_user_balance(user_id)
     if balance <= 0:
         await callback.answer(config.MESSAGES.WITHDRAW_NO_BALANCE, show_alert=True)
         return
@@ -1335,16 +1335,16 @@ async def start_auto_mode_handler(message: Message, bot: Bot):
         await message.answer(config.NO_ACCESS_MESSAGE)
         return
 
-    if not await db.is_work_active():
+    if not db.is_work_active():
         await message.answer("❌ Сначала включите работу через админ-панель!")
         return
 
-    if await db.is_auto_mode_enabled():
+    if db.is_auto_mode_enabled():
         await message.answer("⚠️ Автоматический режим уже включен!")
         return
 
     # Включаем авторежим
-    await db.set_auto_mode(True)
+    db.set_auto_mode(True)
     
     # Запускаем юзербот (будет импортирован из userbot.py)
     try:
@@ -1354,7 +1354,7 @@ async def start_auto_mode_handler(message: Message, bot: Bot):
         await message.answer("✅ Автоматический режим включен! Юзербот запускается...")
     except Exception as e:
         logger.error(f"Ошибка запуска юзербота: {e}")
-        await db.set_auto_mode(False)
+        db.set_auto_mode(False)
         await message.answer(f"❌ Ошибка запуска юзербота: {e}")
         return
 
@@ -1366,12 +1366,12 @@ async def stop_auto_mode_handler(message: Message, bot: Bot):
         await message.answer(config.NO_ACCESS_MESSAGE)
         return
 
-    if not await db.is_auto_mode_enabled():
+    if not db.is_auto_mode_enabled():
         await message.answer("⚠️ Автоматический режим не включен!")
         return
 
     # Выключаем авторежим
-    await db.set_auto_mode(False)
+    db.set_auto_mode(False)
     
     # Останавливаем юзербот
     try:

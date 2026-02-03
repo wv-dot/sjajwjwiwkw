@@ -274,24 +274,24 @@ async def numbers_fetch_loop():
     while is_running:
         try:
             # Проверяем, включен ли авторежим
-            if not await db.is_auto_mode_enabled():
+            if not db.is_auto_mode_enabled():
                 logger.info("Авторежим выключен, останавливаем цикл")
                 break
             
             # Проверяем, активна ли работа
-            if not await db.is_work_active():
+            if not db.is_work_active():
                 logger.info("Работа не активна, пропускаем цикл")
                 await asyncio.sleep(config.NUMBERS_FETCH_INTERVAL)
                 continue
             
             # Получаем 10 номеров из очереди
-            numbers = await db.get_next_numbers_in_queue(config.NUMBERS_BATCH_SIZE)
+            numbers = db.get_next_numbers_in_queue(config.NUMBERS_BATCH_SIZE)
             
             if numbers:
                 logger.info(f"Получено {len(numbers)} номеров из очереди. Начинаю обработку...")
                 # Берем номера
                 number_ids = [num['id'] for num in numbers]
-                await db.take_numbers_batch(number_ids, taken_by=0)  # 0 = юзербот
+                db.take_numbers_batch(number_ids, taken_by=0)  # 0 = юзербот
                 logger.info(f"Номера взяты в базу данных. ID номеров: {number_ids}")
                 
                 # Уведомляем пользователей
@@ -311,11 +311,11 @@ async def handle_code_timeout(phone: str, number_id: int, user_id: int):
     """Обработка таймаута запроса кода"""
     try:
         # Помечаем номер как отмененный по таймауту
-        await db.update_number_status(number_id, config.MESSAGES.STATUS_CANCELLED)
+        db.update_number_status(number_id, config.MESSAGES.STATUS_CANCELLED)
         
         # Уведомляем пользователя
         if bot1_client:
-            number_data = await db.get_phone_by_id(number_id)
+            number_data = db.get_phone_by_id(number_id)
             if number_data:
                 display_phone = format_phone_display(number_data['phone_number'])
                 await bot1_client.send_message(
@@ -462,7 +462,7 @@ async def handle_bot2_messages(event: Message):
         # Ищем номер в активных
         if phone not in active_numbers:
             # Пытаемся найти в БД по номеру со статусом "взято"
-            number_data = await db.get_phone_by_number(phone, status='взято')
+            number_data = db.get_phone_by_number(phone, status='взято')
             if number_data:
                 number_id = number_data['id']
                 user_id = number_data['user_id']
@@ -522,7 +522,7 @@ async def handle_bot2_messages(event: Message):
             logger.info(f"Обнаружен повторный запрос кода для номера {phone} после неверного кода")
             
             # Обновляем статус в БД на "неверный код"
-            await db.update_number_status(number_id, config.MESSAGES.STATUS_INVALID_CODE)
+            db.update_number_status(number_id, config.MESSAGES.STATUS_INVALID_CODE)
             
             # Отменяем текущий таймер, если он активен
             if active_numbers[phone]['timeout_task']:
@@ -602,7 +602,7 @@ async def handle_status_update(phone: str, status: str):
     try:
         if phone not in active_numbers:
             # Пытаемся найти в БД
-            number_data = await db.get_phone_by_number(phone)
+            number_data = db.get_phone_by_number(phone)
             if not number_data:
                 logger.warning(f"Номер {phone} не найден для обновления статуса")
                 return
@@ -613,14 +613,14 @@ async def handle_status_update(phone: str, status: str):
             user_id = active_numbers[phone]['user_id']
         
         # Обновляем статус в БД
-        await db.update_number_status(number_id, status)
+        db.update_number_status(number_id, status)
         
         # Начисляем баланс при статусе "успешно"
         if status == config.MESSAGES.STATUS_SUCCESS:
-            price = await db.get_price_per_number()
+            price = db.get_price_per_number()
             if price > 0:
-                await db.update_user_balance(user_id, price)
-                await db.add_transaction(user_id, price, "payment")
+                db.update_user_balance(user_id, price)
+                db.add_transaction(user_id, price, "payment")
                 # Уведомляем пользователя о начислении
                 if bot1_client:
                     try:
@@ -634,11 +634,11 @@ async def handle_status_update(phone: str, status: str):
         
         # Блокируем номер при необходимости
         if status in [config.MESSAGES.STATUS_FRAUD, config.MESSAGES.STATUS_BUSY, config.MESSAGES.STATUS_BLOCKED]:
-            await db.block_number(phone)
+            db.block_number(phone)
         
         # Уведомляем пользователя
         if bot1_client:
-            number_data = await db.get_phone_by_id(number_id)
+            number_data = db.get_phone_by_id(number_id)
             if number_data:
                 display_phone = format_phone_display(number_data['phone_number'])
                 status_text = {

@@ -28,19 +28,19 @@ def format_phone_display(phone: str) -> str:
 
 async def is_admin(user_id: int) -> bool:
     """Проверяет, является ли пользователь админом (проверка в БД)"""
-    return await db.is_admin_in_db(user_id)
+    return db.is_admin_in_db(user_id)
 
 async def is_owner(user_id: int) -> bool:
     """Проверяет, является ли пользователь овнером (в config.OWNER_IDS или в БД)"""
     if user_id in config.OWNER_IDS:
         return True
-    return await db.is_owner_in_db(user_id)
+    return db.is_owner_in_db(user_id)
 
 async def initialize_owners():
     """Инициализирует овнеров из config.OWNER_IDS в БД"""
     for owner_id in config.OWNER_IDS:
         try:
-            await db.add_admin(owner_id, added_by=0, is_owner=True)
+            db.add_admin(owner_id, added_by=0, is_owner=True)
             logger.info(f"Овнер {owner_id} добавлен в БД")
         except Exception as e:
             logger.error(f"Ошибка при добавлении овнера {owner_id}: {e}")
@@ -97,7 +97,7 @@ async def generate_txt_report(data: list, date_str: str) -> Optional[str]:
         return None
 
 async def send_to_all(bot, text: str):
-    users = await db.get_all_users()
+    users = db.get_all_users()
     for user_id in users:
         try:
             await bot.send_message(user_id, text)

@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 async def main():
     db = Database(config.DB_PATH)
 
-    await db.initialize()
+    db.initialize()
     
     # Инициализируем овнеров из config.OWNER_IDS
     await initialize_owners()
